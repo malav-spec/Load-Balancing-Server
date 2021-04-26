@@ -44,46 +44,13 @@ def getTSHostname():
     msg = str(hname) + " " + str(DNS_table[hname][0]) + " " + str(DNS_table[hname][1])
     return msg
 
+def storeIpToTable(host, ip):
+    print("host: ", host)
+    print("IP: ", ip)
+    DNS_table[host] = ip
 
-# fileToDict()
-#
-# try:
-#     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#     print ("[RS]: Socket successfully created")
-# except socket.error as err:
-#     print ("[RS]: Socket creation failed with error %s" %(err))
-#
-# port = int(argv[1])
-# host = socket.gethostname()
-# server_binding = ('', port)
-#
-# try:
-#     s.bind(server_binding)
-#     print("[RS]: Socket bind successfull")
-# except socket.error as err:
-#     print("[RS]: Socket bind fail with error %s" %(err))
-#
-# s.listen(1)
-#
-# csockid, addr = s.accept()
-# print ("[RS]: Got a connection request from a client at {}".format(addr))
-#
-# while True:
-#     data = csockid.recv(1024).decode()
-#     data = str(data)
-#     data = data.lower()
-#
-#     if not data:
-#         break
-#
-    # if checkHostInDict(str(data)) is True:
-    #     msg = toString(str(data))
-#     else:
-#         msg = getTSHostname()
-#
-#     csockid.send(msg.encode('utf-8'))
-#
-# s.close()
+def getIPFromTable(host):
+    return DNS_table[host]
 
 def send_message(message, address, port):
     print("Mesg in func: ",message)
@@ -106,6 +73,8 @@ def send_message(message, address, port):
             get_ip = parse_IP(binascii.hexlify(temp[i]).decode("utf-8"))
             print("Get IP:", get_ip)
             list.append(get_ip)
+
+        print(list)
 
     except Exception as e:
         print(str(e))
@@ -134,12 +103,19 @@ def checkType(data):
     if 5 > len(data):
         return 0
 
+    print("Data[5]:",data[5])
     if data[5] != '1':
         return -1
     return 1
 
 def check_Last_Ip(list, ip):
     print(list)
+    if not list:
+        list = []
+        list.append("Other")
+        return list
+    print(list)
+    print("In last IP: ",ip)
     if list[len(list)-1] != ip:
         if list[len(list)-1] == "Other":
             list.append(ip)
@@ -171,12 +147,15 @@ def connect_to_client(port):
 
         if checkHostInDict(str(data)) is True:
             print("In table")
-            send_data = "IP from table"
+            send_data = getIPFromTable(data)
         else:
             ip = getIP(data)
-            print(ip)
             send_data = ""
-            if len(ip) == 1:
+            print(ip)
+
+            if ip[0] == "Other":
+                send_data = data + " - Error: HOST NOT FOUND"
+            elif len(ip) == 1:
                 send_data = ip[0]
             else:
                 for i in range(len(ip)):
@@ -187,7 +166,7 @@ def connect_to_client(port):
                         continue
                     else:
                         send_data = send_data + ", " + ip[i]
-            #storeIpToTable(data, send_data)
+            storeIpToTable(data, send_data)
         csockid.send(send_data.encode('utf-8'))
 
     sock_to_client.close()
@@ -207,7 +186,6 @@ def bin_to_ipv4(in_binary):
 
     in_binary = in_binary[::-1]
 
-
     format_bin = [(in_binary[i:i+8]) for i in range(0, len(in_binary), 8)]
 
     format_bin = [x[::-1] for x in format_bin]
@@ -215,6 +193,13 @@ def bin_to_ipv4(in_binary):
     format_bin = [str(int(x,2)) for x in format_bin]
 
     return format_list(format_bin)
+
+def getHexLength(length):
+
+    length =  hex(length).lstrip("0x").rstrip("L")
+    if len(length) % 2 != 0:
+        length = "0" + length
+    return length
 
 def getRequest(name):
     temp = name.split(".")
@@ -230,14 +215,14 @@ def getRequest(name):
             host_length = "0" + str(host_length)
             print("host length < 10", host_length)
         else:
-            host_length=""+str(host_length)
+            host_length= getHexLength(host_length)
 
         part = str(host_length)
         print("part", part)
         request = request + part
         print("request:",request)
         print(host_length)
-        for j in range(int(host_length)):
+        for j in range(int(host_length, 16)):
             request = request  + " " + "".join(hex(ord(host[j]))[2:]) + " "
 
     return request + " 00 00 01 00 01"
@@ -261,6 +246,7 @@ def getIP(name):
     length_mask = data_mask << 16
     r_legnth = length_mask.bit_length()
     ip = num & data_mask
+    print("IP::" , ip)
     bin_ip = bin(ip).replace("0b", "")
     ip = bin_to_ipv4(bin_ip)
     response = check_Last_Ip(response, ip)
