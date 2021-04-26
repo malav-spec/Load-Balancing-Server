@@ -5,51 +5,21 @@ import sys
 DNS_table = {}
 ts1_list = []
 ts2_list = []
-# def fileToDict():
-#     f = open("PROJ3-HNS.txt", "r")
-#     Lines = f.readlines()
-#
-#     for line in Lines:
-#         new_list = []
-#         line = line.strip()
-#         pairs = line.split(' ')
-#         hostname = pairs[0]
-#         ip_addr = pairs[1]
-#         cmd = pairs[2]
-#         new_list.append(ip_addr)
-#         new_list.append(cmd)
-#         DNS_table[hostname] = new_list
-#
-#     f.close()
-#
-# def checkHostInDict(host):
-#     if host in DNS_table.keys():
-#         return True
-#     else:
-#         return False
-#
-# def toString(host):
-#     hname = host
-#     ip = str(DNS_table[host][0])
-#     cmd = str(DNS_table[host][1])
-#     name = hname+" "+ip+" "+cmd
-#     return name
-#
-# def getTSHostname():
-#     for key in DNS_table.keys():
-#         if DNS_table[key][1] == "NS":
-#             hname = str(key)
-#             break
-#
-#     msg = str(hname) + " " + str(DNS_table[hname][0]) + " " + str(DNS_table[hname][1])
-#     return msg
-#
-#
-# fileToDict()
+
+# def empty_socket(sock):
+#     """remove the data present on the socket"""
+#     input = [sock]
+#     while 1:
+#         inputready, o, e = select.select(input,[],[], 0.0)
+#         if len(inputready)==0: break
+#         for s in inputready: s.recv(1)
+
 
 def addToList(counter, data):
+
     print("In add to list:" , data)
     print(counter)
+
     if counter == 0:
         ts1_list.append(data)
     elif counter == 1:
@@ -85,6 +55,8 @@ except socket.error as err:
 
 ts1_server_addr = (sys.argv[2], int(sys.argv[3]))
 ts1.connect(ts1_server_addr)
+ts1.settimeout(3)
+# ts1.settimeout(0.0000000000000000000001)
 
 #Open ts2 socket
 try:
@@ -95,6 +67,8 @@ except socket.error as err:
 
 ts2_server_addr = (sys.argv[4], int(sys.argv[5]))
 ts2.connect(ts2_server_addr)
+# ts2.settimeout(0.0000000000000000000001)
+ts2.settimeout(3)
 
 counter = 0
 
@@ -105,7 +79,7 @@ while True:
     data = data.lower()
     print(data)
     msg="recv"
-
+    ip=""
     if not data:
         break
 
@@ -119,21 +93,69 @@ while True:
         addToList(counter, data)
 
     if counter == 0:
-        ts1.sendall(data.encode('utf-8'))
-        ip = ts1.recv(1024)
-        ip = ip.decode('utf-8')
-        print(ip)
-        counter = 1
-    else:
-        ts2.sendall(data.encode('utf-8'))
-        ip = ts2.recv(1024)
-        ip = ip.decode('utf-8')
-        print(ip)
-        counter = 0
-    # if checkHostInDict(str(data)) is True:
-    #     msg = toString(str(data))
-    # else:
-    #     msg = getTSHostname()
+        print(data)
+        try:
+            ts1.sendall(data.encode('utf-8'))
+            ip = ts1.recv(1024)
+            ip = ip.decode('utf-8')
+            print("In ts1", ip)
+            counter = 1
+            csockid.send(ip.encode('utf-8'))
+            continue
+        except socket.timeout as e:
+            print("TS1 timeout") #If ts1 timeout send to ts2
+            try:
+                ts2.sendall(data.encode('utf-8'))
+                ip = ts2.recv(1024)
+                ip = ip.decode('utf-8')
+                print(ip)
+                counter = 1
+                csockid.send(ip.encode('utf-8'))
+                continue
+            except socket.timeout as e:
+                print("TS2 also timeout") # if ts2 also timeout send error message
+                ip = data + " - Error:HOST NOT FOUND"
+
+                if data in ts1_list:
+                    ts1_list.remove(data)
+                elif data in ts2_list:
+                    ts2_list.remove(data)
+                csockid.send(ip.encode('utf-8'))
+                counter = 1
+                continue
+
+    elif counter == 1:
+        print(data)
+        try:
+            ts2.sendall(data.encode('utf-8'))
+            ip = ts2.recv(1024)
+            ip = ip.decode('utf-8')
+            print("In ts2", ip)
+            counter = 0
+            csockid.send(ip.encode('utf-8'))
+            continue
+        except socket.timeout as e:
+            print("TS2 timeout")#If ts2 timeout send to ts1
+            try:
+                ts1.sendall(data.encode('utf-8'))
+                ip = ts1.recv(1024)
+                ip = ip.decode('utf-8')
+                print(ip)
+                counter = 0
+                csockid.send(ip.encode('utf-8'))
+                continue
+            except socket.timeout as e:
+                print("TS1 also timeout")# if ts1 also timeout send error message
+                ip = data + " - Error:HOST NOT FOUND"
+
+                if data in ts1_list:
+                    ts1_list.remove(data)
+                elif data in ts2_list:
+                    ts2_list.remove(data)
+
+                csockid.send(ip.encode('utf-8'))
+                counter = 0
+                continue
 
     csockid.send(ip.encode('utf-8'))
 
