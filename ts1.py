@@ -142,6 +142,9 @@ def connect_to_client(port):
         data = csockid.recv(1024).decode()
         data = str(data)
 
+        # while True:
+        #     a = 0
+
         if not data:
             break
 
