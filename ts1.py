@@ -157,7 +157,7 @@ def connect_to_client(port):
             print(ip)
 
             if ip[0] == "Other":
-                send_data = data + " - Error: HOST NOT FOUND"
+                send_data = data + " - Error:HOST NOT FOUND"
             elif len(ip) == 1:
                 send_data = ip[0]
             else:
@@ -241,6 +241,7 @@ def getIP(name):
     print(message)
     message = message.replace(" ","").replace("\n","")
     print(message)
+        # exit()
     data,response = send_message(message, "8.8.8.8", 53)
     print("Data", data)
     print("Response", response)
