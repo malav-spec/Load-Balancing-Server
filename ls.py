@@ -1,19 +1,10 @@
 import socket
 import sys
+import select
 
 
-DNS_table = {}
 ts1_list = []
 ts2_list = []
-
-# def empty_socket(sock):
-#     """remove the data present on the socket"""
-#     input = [sock]
-#     while 1:
-#         inputready, o, e = select.select(input,[],[], 0.0)
-#         if len(inputready)==0: break
-#         for s in inputready: s.recv(1)
-
 
 def addToList(counter, data):
 
@@ -70,12 +61,13 @@ ts2_server_addr = (sys.argv[4], int(sys.argv[5]))
 ts2.connect(ts2_server_addr)
 # ts2.settimeout(0.0000000000000000000001)
 ts2.settimeout(3)
-# ts2.setblocking(0)
 
 counter = 0
 server1_down = 0
 server2_down = 0
 
+is_readable = [ts2]
+is_writeable = [ts2]
 while True:
 
     data = csockid.recv(1024).decode()
@@ -89,35 +81,31 @@ while True:
 
     if data in ts1_list:
         print("ts1 list: ", ts1_list)
-        counter = 0
+        if server1_down == 0:
+            counter = 0
+        else:
+            counter = 1
     elif data in ts2_list:
         print("ts2 list: ", ts2_list)
-        counter = 1
+        if server2_down == 0:
+            counter = 1
+        else:
+            counter = 0
     else:
         addToList(counter, data)
 
     if counter == 0 and server1_down == 0:
         print(data)
         try:
-            try:#This is for checking if server 1 is up
-                ts1.sendall(data.encode('utf-8'))
-                ip = ts1.recv(1024)
-                ip = ip.decode('utf-8')
-                print("In ts1", ip)
-                if server2_down == 0:
-                    counter = 1
-                csockid.send(ip.encode('utf-8'))
-                continue
-            except Exception as e:#If server 1 is down send data to server 2 forever
-                server1_down = 1
-                ts2.sendall(data.encode('utf-8'))
-                ip = ts2.recv(1024)
-                ip = ip.decode('utf-8')
-                print(ip)
+            #This is for checking if server 1 is up
+            ts1.sendall(data.encode('utf-8'))
+            ip = ts1.recv(1024)
+            ip = ip.decode('utf-8')
+            print("In ts1", ip)
+            if server2_down == 0:
                 counter = 1
-                csockid.send(ip.encode('utf-8'))
-                continue
-
+            csockid.send(ip.encode('utf-8'))
+            continue
         except socket.timeout as e:
             print("TS1 timeout") #If ts1 timeout send to ts2
             try:
@@ -131,7 +119,6 @@ while True:
             except socket.timeout as e:
                 print("TS2 also timeout") # if ts2 also timeout send error message
                 ip = data + " - Error:HOST NOT FOUND"
-
                 if data in ts1_list:
                     ts1_list.remove(data)
                 elif data in ts2_list:
@@ -139,29 +126,29 @@ while True:
                 csockid.send(ip.encode('utf-8'))
                 counter = 1
                 continue
+        except Exception as e:
+            print("IN EXCEPTION")#If server 1 is down send data to server 2 forever
+            server1_down = 1
+            ts2.sendall(data.encode('utf-8'))
+            ip = ts2.recv(1024)
+            ip = ip.decode('utf-8')
+            print(ip)
+            counter = 1
+            csockid.send(ip.encode('utf-8'))
+            continue
+
 
     elif counter == 1 and server2_down == 0:
         print(data)
-        try:
-            try:#This is for checking if server is up
-                ts2.sendall(data.encode('utf-8'))
-                ip = ts2.recv(1024)
-                ip = ip.decode('utf-8')
-                print("In ts2", ip)
-                if server1_down == 0:
-                    counter = 0
-                csockid.send(ip.encode('utf-8'))
-                continue
-            except Exception as e:#If server down send data to another server forever
-                server2_down = 1
-                ts1.sendall(data.encode('utf-8'))
-                ip = ts1.recv(1024)
-                ip = ip.decode('utf-8')
-                print(ip)
+        try:#This is for checking if server is up
+            ts2.sendall(data.encode('utf-8'))
+            ip = ts2.recv(1024)
+            ip = ip.decode('utf-8')
+            print("In ts2", ip)
+            if server1_down == 0:
                 counter = 0
-                csockid.send(ip.encode('utf-8'))
-                continue
-
+            csockid.send(ip.encode('utf-8'))
+            continue
         except socket.timeout as e:
             print("TS2 timeout")#If ts2 timeout send to ts1
             try:
@@ -184,6 +171,16 @@ while True:
                 csockid.send(ip.encode('utf-8'))
                 counter = 0
                 continue
+        except Exception as e:
+            print("IN Exception")#If server down send data to another server forever
+            server2_down = 1
+            ts1.sendall(data.encode('utf-8'))
+            ip = ts1.recv(1024)
+            ip = ip.decode('utf-8')
+            print(ip)
+            counter = 0
+            csockid.send(ip.encode('utf-8'))
+            continue
 
     csockid.send(ip.encode('utf-8'))
 
